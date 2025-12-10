@@ -521,7 +521,7 @@ class SharedDataStore {
         static_assert(std::is_trivially_destructible_v<T>, "T 不允许为指针");
 
         alignas(CACHE_LINE_SIZE) atomic<uint64_t> producer_idx{0};
-        alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> futex_flag{0};
+        alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};
         PaddedValue<T> data[CNT];
 
         static uint64_t mask(const uint64_t val) {
