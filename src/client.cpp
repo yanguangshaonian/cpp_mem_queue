@@ -16,10 +16,19 @@ int main() {
     auto t = thread([&]() {
         auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
         auto store_name = string("student");
+
         auto data_store = memory_store.attach(store_name, 2000);
 
+        while (data_store == nullptr) {
+            cerr << "attach failed" << endl;
+            data_store = memory_store.attach(store_name, 2000);
+            this_thread::sleep_for(chrono::milliseconds(100));
+        }
+
+
         while (true) {
-            auto read_ret = data_store->read(cnt, [&](const Student& student) {
+            auto read_ret = data_store->read_wait(cnt, [&](const Student& student) {
+                // auto read_ret = data_store->read(cnt, [&](const Student& student) {
                 age_cnt += student.age;
             });
             if (read_ret == ReadStatus::OVERWRITTEN) {
