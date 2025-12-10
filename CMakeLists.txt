@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 
 include_directories(lib)
+add_compile_options(-mwaitpkg)
 
 add_executable(main src/main.cpp)
 add_executable(client src/client.cpp)

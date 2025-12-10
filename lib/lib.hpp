@@ -621,6 +621,43 @@ class SharedDataStore {
                 syscall(SYS_futex, &futex_flag, FUTEX_WAIT, expected, ts_ptr, nullptr, 0);
             }
         }
+
+        template<class ReaderFunc>
+        ReadStatus read_umwait(uint64_t local_read_idx, ReaderFunc reader, int timeout_us = -1, uint32_t state = 1) {
+            constexpr uint64_t CYCLES_PER_US = 2500;
+            bool infinite_wait = (timeout_us < 0);
+            uint64_t tsc_deadline = 0;
+
+            if (!infinite_wait) {
+                tsc_deadline = __rdtsc() + (timeout_us * CYCLES_PER_US);
+            } else {
+                // 设置为最大值，但注意 umwait 有 OS 级的最大休眠时间限制
+                tsc_deadline = ~0ULL;
+            }
+
+            while (true) {
+                auto read_status = this->read(local_read_idx, reader);
+
+                // 初次读取后的校验
+                if (read_status != ReadStatus::NOT_READY) {
+                    return read_status;
+                }
+
+                _umonitor(&this->producer_idx);
+
+                // 二次校验
+                if (this->get_current_idx() > local_read_idx) {
+                    continue;
+                }
+
+                if (!infinite_wait) {
+                    if (__rdtsc() >= tsc_deadline) {
+                        return ReadStatus::NOT_READY;
+                    }
+                }
+                _umwait(state, tsc_deadline);
+            };
+        };
 };
 
 template<class T, uint64_t CNT>

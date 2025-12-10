@@ -27,8 +27,9 @@ int main() {
 
 
         while (true) {
-            auto read_ret = data_store->read_wait(cnt, [&](const Student& student) {
-                // auto read_ret = data_store->read(cnt, [&](const Student& student) {
+            // auto read_ret = data_store->read_wait(cnt, [&](const Student& student) {
+            // auto read_ret = data_store->read(cnt, [&](const Student& student) {
+            auto read_ret = data_store->read_umwait(cnt, [&](const Student& student) {
                 age_cnt += student.age;
             });
             if (read_ret == ReadStatus::OVERWRITTEN) {

@@ -18,15 +18,14 @@ int main() {
 
     auto start_time = steady_clock::now();
     for (int i = 0; i < 1024 * 1024 * 10; ++i) {
-        data_store->write_wake([&](Student& student) {
-            // data_store->write([&](Student& student) {
+        // data_store->write_wake([&](Student& student) {
+        data_store->write([&](Student& student) {
             student.age = i;
         });
         age_cnt += i;
 
         _mm_pause();
         _mm_pause();
-        this_thread::sleep_for(chrono::milliseconds(1));
     }
     auto end_time = steady_clock::now();
 
