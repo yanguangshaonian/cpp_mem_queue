@@ -611,7 +611,7 @@ class SharedDataStore {
                         return ReadStatus::NOT_READY; // 确实超时了
                     }
 
-                    // 计算剩余的纳秒数
+                    // 计算剩余的微秒数
                     auto remaining_ns = duration_cast<nanoseconds>(end_time - now).count();
                     ts.tv_sec = remaining_ns / 1000000000LL;
                     ts.tv_nsec = remaining_ns % 1000000000LL;
