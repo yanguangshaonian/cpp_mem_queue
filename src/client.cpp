@@ -17,14 +17,8 @@ int main() {
         auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
         auto store_name = string("student");
 
-        auto data_store = memory_store.attach(store_name, 2000);
+        auto data_store = memory_store.init(store_name, Role::READER);
         cnt = data_store->get_current_idx();
-
-        while (data_store == nullptr) {
-            cerr << "attach failed" << endl;
-            data_store = memory_store.attach(store_name, 2000);
-            this_thread::sleep_for(chrono::milliseconds(100));
-        }
 
 
         while (true) {

@@ -489,8 +489,8 @@ enum class ReadStatus {
 };
 
 enum class Role {
-    CONSUMER,
-    PUBLISHER
+    WRITER,
+    READER
 };
 
 inline int futex_wake(std::atomic<int>* addr, int count) {
@@ -686,72 +686,66 @@ class MemoryStorage {
             return ptr;
         }
 
-        bool try_resume() {
-            // 尝试打开现有的 (不带 O_CREAT)
+        int try_join_existing() {
             this->shm_fd = shm_open(this->storage_name.c_str(), O_RDWR, 0660);
             if (this->shm_fd == -1) {
-                return false; // 文件不存在
+                return -1; // 文件不存在，去创建
             }
 
-            auto ptr = map_memory_segment();
+            void* ptr = map_memory_segment();
             if (ptr == MAP_FAILED) {
                 close(this->shm_fd);
-                this->shm_fd = -1;
-                return false;
+                return -1;
             }
 
-            auto* existing_layout = static_cast<ShmLayout*>(ptr);
+            auto* temp_layout = static_cast<ShmLayout*>(ptr);
 
-            // 校验 Magic
-            if (existing_layout->ready_flag.load(memory_order_acquire) == SHM_READY_MAGIC) {
-                this->layout_ptr = existing_layout;
-                cout << ">> [恢复成功] 检测到存活的共享内存" << endl;
-                cout << ">> 当前生产序列号: " << this->layout_ptr->store.get_current_idx() << endl;
-                return true;
+            // 等待初始化完成(极短窗口)
+            auto start = steady_clock::now();
+            while (temp_layout->ready_flag.load(memory_order_acquire) != SHM_READY_MAGIC) {
+                if (steady_clock::now() - start > milliseconds(100)) {
+                    // 超时仍未就绪，说明是残留的坏文件，执行清理
+                    cerr << ">> [警告] 检测到残留的损坏文件 (Magic无效), 正在清理..." << endl;
+                    munmap(ptr, shared_data_store_size);
+                    close(this->shm_fd);
+                    shm_unlink(this->storage_name.c_str());
+                    return -2; // 文件存在但无效(已执行unlink)
+                }
+                this_thread::sleep_for(milliseconds(1));
             }
 
-            // Magic 不对，清理并返回失败，以便后续重建
-            cerr << ">> [恢复失败] 文件存在但 Magic 校验未通过" << endl;
-            munmap(ptr, shared_data_store_size);
-            close(this->shm_fd);
-            this->shm_fd = -1;
-            return false;
+            this->layout_ptr = temp_layout;
+            return 0;
         }
 
-        bool create_fresh() {
-            cout << ">> [创建模式] 开始新建共享内存..." << endl;
-            // 确保清理旧文件
-            shm_unlink(this->storage_name.c_str());
-
+        bool try_create_new() {
+            // O_EXCL 保证原子性：如果文件已存在则报错 EEXIST
             this->shm_fd = shm_open(this->storage_name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0660);
             if (this->shm_fd == -1) {
-                cerr << "shm_open 创建失败: " << strerror(errno) << endl;
                 return false;
             }
 
             if (ftruncate(this->shm_fd, shared_data_store_size) == -1) {
                 cerr << "ftruncate 失败: " << strerror(errno) << endl;
                 close(this->shm_fd);
-                this->shm_fd = -1;
+                shm_unlink(this->storage_name.c_str());
                 return false;
             }
 
-            auto ptr = map_memory_segment();
+            void* ptr = map_memory_segment();
             if (ptr == MAP_FAILED) {
                 cerr << "mmap 失败: " << strerror(errno) << endl;
                 close(this->shm_fd);
                 shm_unlink(this->storage_name.c_str());
-                this->shm_fd = -1;
                 return false;
             }
 
             this->layout_ptr = static_cast<ShmLayout*>(ptr);
-
-            // 只有新建时才调用 Placement New
+            // 初始化
             new (this->layout_ptr) ShmLayout();
             this->layout_ptr->ready_flag.store(SHM_READY_MAGIC, memory_order_release);
 
-            cout << ">> [创建成功] " << this->storage_name << " " << shared_data_store_size << " bytes" << endl;
+            cout << ">> [新建成功] " << this->storage_name << " created." << endl;
             return true;
         }
 
@@ -759,80 +753,51 @@ class MemoryStorage {
         string storage_name;
         const uint64_t shared_data_store_size = sizeof(ShmLayout);
         MemoryStorage() = default;
-
-        StoreType* create_or_resume(string& storage_name) {
-            this->storage_name = std::move(storage_name);
-            this->role = Role::PUBLISHER;
-
-            if (geteuid() != 0) {
-                cerr << "Error: create 需要 root 权限用于 HugePage/mmap" << endl;
-                return nullptr;
-            }
-
-            // 逻辑流非常清晰：先尝试A，如果成功直接返回；否则执行B
-            if (try_resume()) {
-                return &(this->layout_ptr->store);
-            }
-
-            if (create_fresh()) {
-                return &(this->layout_ptr->store);
-            }
-
-            return nullptr;
-        }
-
-        StoreType* attach(string& storage_name, const uint32_t delay_time_us) {
-            auto start_time = steady_clock::now();
-            auto end_time = start_time + microseconds(delay_time_us);
-
-            this->storage_name = std::move(storage_name);
-            if (geteuid() != 0) {
-                cerr << "需要 root 权限, 否则无法进行 shm_open / mmap / MAP_HUGETLB 等操作" << endl;
-                return nullptr;
-            }
-
-            this->role = Role::CONSUMER;
-            this->shm_fd = shm_open(this->storage_name.c_str(), O_RDWR, 0660);
-            if (this->shm_fd == -1) {
-                cerr << "shm_open (attach) 调用失败: " << strerror(errno) << endl;
-                return nullptr;
-            }
-
-            auto mapped_ptr = mmap(nullptr, shared_data_store_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB,
-                                   this->shm_fd, 0);
-            if (mapped_ptr == MAP_FAILED) {
-                mapped_ptr = mmap(nullptr, shared_data_store_size, PROT_READ | PROT_WRITE, MAP_SHARED, this->shm_fd, 0);
-            }
-            if (mapped_ptr == MAP_FAILED) {
-                close(this->shm_fd);
-                cerr << "mmap (attach) 调用失败: " << strerror(errno) << endl;
-                return nullptr;
-            }
-
-            this->layout_ptr = static_cast<ShmLayout*>(mapped_ptr);
-
-            while (this->layout_ptr->ready_flag.load(memory_order_acquire) != SHM_READY_MAGIC) {
-                _mm_pause();
-                this_thread::yield();
-                if (std::chrono::steady_clock::now() > end_time) {
-                    cerr << "attach() 等待 ready_flag 超过 " << delay_time_us << "us" << endl;
-                    return nullptr;
-                }
-                this_thread::sleep_for(milliseconds(1));
-            }
-
-            cout << "附加耗时: "
-                 << duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start_time).count()
-                 << "us" << endl;
-            cout << "附加 " << this->storage_name << " " << shared_data_store_size << " bytes 共享内存" << endl;
-            return &(this->layout_ptr->store);
-        }
-
         MemoryStorage(const MemoryStorage&) = delete;
         MemoryStorage& operator=(const MemoryStorage&) = delete;
 
+        StoreType* init(string& storage_name, Role role) {
+            this->storage_name = std::move(storage_name);
+            this->role = role;
+
+            if (geteuid() != 0) {
+                cerr << "Error: 需要 root 权限 (HugePage/mmap)" << endl;
+                return nullptr;
+            }
+
+            // 重试循环：处理并发启动时的竞争
+            int retries = 3;
+            while (retries != 0) {
+                retries -= 1;
+
+                // 复用
+                int join_ret = try_join_existing();
+                if (join_ret == 0) {
+                    cout << ">> [复用成功] Role: " << (role == Role::WRITER ? "WRITER" : "READER")
+                         << ", Index: " << this->layout_ptr->store.get_current_idx() << endl;
+                    return &(this->layout_ptr->store);
+                }
+
+                // 新建
+                if (try_create_new()) {
+                    return &(this->layout_ptr->store);
+                }
+
+                // 有些异常
+                if (errno == EEXIST) {
+                    cout << ">> [并发竞争] 检测到其他进程刚刚创建了文件，重试..." << endl;
+                    continue;
+                }
+
+                // 其他错误
+                cerr << "shm_open 失败: " << strerror(errno) << endl;
+                break;
+            }
+            return nullptr;
+        }
+
         ~MemoryStorage() {
-            auto role = this->role == Role::PUBLISHER ? "生产者 " : "消费者 ";
+            auto role = this->role == Role::WRITER ? "WRITER " : "READER ";
             if (this->layout_ptr) {
                 munmap(this->layout_ptr, shared_data_store_size);
                 cout << role << this->storage_name << " munmap 已完成" << endl;

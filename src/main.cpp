@@ -11,7 +11,7 @@ using namespace std;
 int main() {
     auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
     auto store_name = string("student");
-    auto data_store = memory_store.create_or_resume(store_name);
+    auto data_store = memory_store.init(store_name, Role::WRITER);
 
     sleep(5);
     uint64_t age_cnt = 0;
@@ -24,7 +24,6 @@ int main() {
         });
         age_cnt += i;
 
-        _mm_pause();
         _mm_pause();
     }
     cout << "end" << endl;
