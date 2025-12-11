@@ -18,6 +18,7 @@ int main() {
         auto store_name = string("student");
 
         auto data_store = memory_store.attach(store_name, 2000);
+        cnt = data_store->get_current_idx();
 
         while (data_store == nullptr) {
             cerr << "attach failed" << endl;
