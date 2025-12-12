@@ -216,10 +216,10 @@ class MemoryStorage {
 
         // 优先尝试大页, 失败降级为普通页
         void* map_memory_segment() {
-            auto ptr = mmap(nullptr, shared_data_store_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB,
-                            this->shm_fd, 0);
+            auto ptr = mmap(nullptr, layout_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB, this->shm_fd, 0);
             if (ptr == MAP_FAILED) {
-                ptr = mmap(nullptr, shared_data_store_size, PROT_READ | PROT_WRITE, MAP_SHARED, this->shm_fd, 0);
+                cout << "mmap 大页分配错误: " << strerror(errno) << ", 尝试回退" << endl;
+                ptr = mmap(nullptr, layout_size, PROT_READ | PROT_WRITE, MAP_SHARED, this->shm_fd, 0);
             }
             return ptr;
         }
@@ -232,6 +232,7 @@ class MemoryStorage {
 
             void* ptr = map_memory_segment();
             if (ptr == MAP_FAILED) {
+                cerr << "mmap 失败: " << strerror(errno) << endl;
                 close(this->shm_fd);
                 return -1;
             }
@@ -244,7 +245,7 @@ class MemoryStorage {
                 if (steady_clock::now() - start > milliseconds(100)) {
                     // 超时仍未就绪，说明是残留的坏文件，执行清理
                     cerr << ">> [警告] 检测到残留的损坏文件 (Magic无效), 正在清理..." << endl;
-                    munmap(ptr, shared_data_store_size);
+                    munmap(ptr, layout_size);
                     close(this->shm_fd);
                     shm_unlink(this->storage_name.c_str());
                     return -2; // 文件存在但无效(已执行unlink)
@@ -265,7 +266,7 @@ class MemoryStorage {
                 return false;
             }
 
-            if (ftruncate(this->shm_fd, shared_data_store_size) == -1) {
+            if (ftruncate(this->shm_fd, layout_size) == -1) {
                 cerr << "ftruncate 失败: " << strerror(errno) << endl;
                 close(this->shm_fd);
                 shm_unlink(this->storage_name.c_str());
@@ -291,7 +292,7 @@ class MemoryStorage {
 
     public:
         string storage_name;
-        const uint64_t shared_data_store_size = sizeof(ShmLayout);
+        const uint64_t layout_size = sizeof(ShmLayout);
         MemoryStorage() = default;
         MemoryStorage(const MemoryStorage&) = delete;
         MemoryStorage& operator=(const MemoryStorage&) = delete;
@@ -337,7 +338,7 @@ class MemoryStorage {
         ~MemoryStorage() {
             auto role = this->role == Role::WRITER ? "WRITER " : "READER ";
             if (this->layout_ptr) {
-                munmap(this->layout_ptr, shared_data_store_size);
+                munmap(this->layout_ptr, layout_size);
                 cout << role << this->storage_name << " munmap 已完成" << endl;
             }
 
