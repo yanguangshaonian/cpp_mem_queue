@@ -760,7 +760,7 @@ class MemoryStorage {
         MemoryStorage& operator=(const MemoryStorage&) = delete;
 
         StoreType* build(string& storage_name, Role role) {
-            this->storage_name = std::move(storage_name);
+            this->storage_name = storage_name;
             this->role = role;
 
             if (geteuid() != 0) {
