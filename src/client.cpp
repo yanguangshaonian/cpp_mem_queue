@@ -17,7 +17,7 @@ int main() {
         auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
         auto store_name = string("student");
 
-        auto data_store = memory_store.init(store_name, Role::READER);
+        auto data_store = memory_store.build(store_name, Role::READER);
         cnt = data_store->get_current_idx();
 
 

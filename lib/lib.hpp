@@ -454,10 +454,11 @@
 
 #ifndef LIB_HPP
 #define LIB_HPP
-#include <chrono>
+
 #pragma pack(push)
 #pragma pack()
 
+#include <chrono>
 #include <string>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -756,7 +757,7 @@ class MemoryStorage {
         MemoryStorage(const MemoryStorage&) = delete;
         MemoryStorage& operator=(const MemoryStorage&) = delete;
 
-        StoreType* init(string& storage_name, Role role) {
+        StoreType* build(string& storage_name, Role role) {
             this->storage_name = std::move(storage_name);
             this->role = role;
 
