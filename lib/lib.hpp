@@ -311,7 +311,7 @@ class MemoryStorage {
         MemoryStorage(const MemoryStorage&) = delete;
         MemoryStorage& operator=(const MemoryStorage&) = delete;
 
-        StoreType* build(string& storage_name, Role role) {
+        StoreType* build(string storage_name, Role role) {
             this->storage_name = storage_name;
             this->role = role;
 
