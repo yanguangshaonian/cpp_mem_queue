@@ -715,6 +715,8 @@ class MemoryStorage {
                 this_thread::sleep_for(milliseconds(1));
             }
 
+            cout << ">> [复用成功] " << this->storage_name
+                 << " attached. Index: " << temp_layout->store.get_current_idx() << endl;
             this->layout_ptr = temp_layout;
             return 0;
         }
@@ -774,8 +776,6 @@ class MemoryStorage {
                 // 复用
                 int join_ret = try_join_existing();
                 if (join_ret == 0) {
-                    cout << ">> [复用成功] Role: " << (role == Role::WRITER ? "WRITER" : "READER")
-                         << ", Index: " << this->layout_ptr->store.get_current_idx() << endl;
                     return &(this->layout_ptr->store);
                 }
 
