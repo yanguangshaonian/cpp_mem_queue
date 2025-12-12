@@ -17,13 +17,14 @@ int main() {
         auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
         auto store_name = string("student");
 
-        auto data_store = memory_store.build(store_name, Role::READER);
-        cnt = data_store->get_current_idx();
+        memory_store.build(store_name, Role::READER);
+        auto& store = memory_store.get_store();
+        cnt = store.get_current_idx();
 
 
         while (true) {
             // auto read_ret = data_store->read_wait(cnt, [&](const Student& student) {
-            auto read_ret = data_store->read(cnt, [&](const Student& student) {
+            auto read_ret = store.read(cnt, [&](const Student& student) {
                 // auto read_ret = data_store->read_umwait(cnt, [&](const Student& student) {
                 age_cnt += student.age;
             });

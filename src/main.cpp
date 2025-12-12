@@ -11,14 +11,15 @@ using namespace std;
 int main() {
     auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
     auto store_name = string("student");
-    auto data_store = memory_store.build(store_name, Role::WRITER);
+    memory_store.build(store_name, Role::WRITER);
 
-    sleep(5);
+    auto& sotre = memory_store.get_store();
+    sleep(1);
     uint64_t age_cnt = 0;
     cout << "start" << endl;
     auto start_time = steady_clock::now();
     for (int i = 0; i < 1024 * 1024 * 10; ++i) {
-        data_store->write([&](Student& student) {
+        sotre.write([&](Student& student) {
             // data_store->write_wake([&](Student& student) {
             student.age = i;
         });
@@ -29,7 +30,7 @@ int main() {
     cout << "end" << endl;
     auto end_time = steady_clock::now();
 
-    sleep(3);
+    sleep(1);
     cout << "main " << age_cnt << endl;
     cout << "耗时: " << duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << "ms" << endl;
 }
