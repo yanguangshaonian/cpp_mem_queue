@@ -44,25 +44,10 @@ enum class Role {
     READER
 };
 
-inline int futex_wake(std::atomic<int>* addr, int count) {
-    return syscall(SYS_futex, reinterpret_cast<int*>(addr), FUTEX_WAKE, count, nullptr, nullptr, 0);
-}
-
 template<class T>
 class alignas(CACHE_LINE_SIZE) PaddedValue {
     public:
-        alignas(alignof(T)) std::byte data_bytes[sizeof(T)]{};
-
-        T& value() {
-            return *reinterpret_cast<T*>(&data_bytes);
-        }
-
-        const T& value() const {
-            return *reinterpret_cast<const T*>(&data_bytes);
-        }
-
-        PaddedValue() = default;
-        ~PaddedValue() = default;
+        T value;
 };
 
 template<class T, uint64_t CNT>
@@ -73,7 +58,7 @@ class SharedDataStore {
 
         alignas(CACHE_LINE_SIZE) atomic<uint64_t> producer_idx{0};
         alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};
-        PaddedValue<T> data[CNT];
+        alignas(CACHE_LINE_SIZE) PaddedValue<T> data[CNT];
 
         static uint64_t mask(const uint64_t val) {
             return val & (CNT - 1);
@@ -87,7 +72,7 @@ class SharedDataStore {
         template<class Writer>
         inline __attribute__((always_inline)) void write(Writer&& writer) {
             const uint64_t current_idx = this->producer_idx.load(memory_order_relaxed);
-            auto& data_ref = this->data[mask(current_idx)].value();
+            auto& data_ref = this->data[mask(current_idx)].value;
 
             if constexpr (!std::is_trivially_destructible_v<T>) {
                 if (current_idx >= CNT) {
@@ -117,7 +102,7 @@ class SharedDataStore {
                     if (local_read_idx < oldest_available_idx) {
                         return ReadStatus::OVERWRITTEN;
                     }
-                    const auto& data_ref = this->data[mask(local_read_idx)].value();
+                    const auto& data_ref = this->data[mask(local_read_idx)].value;
                     reader(data_ref);
                     return ReadStatus::SUCCESS;
                 }

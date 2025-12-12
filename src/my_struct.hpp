@@ -10,6 +10,8 @@ class Student {
         char name[66]{};
         uint32_t age;
 
+        Student() = default;
+
         explicit Student(const uint32_t age)
             : age(age) {
             name[0] = '1';
