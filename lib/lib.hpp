@@ -85,7 +85,7 @@ class SharedDataStore {
         }
 
         template<class Writer>
-        void write(Writer&& writer) {
+        inline __attribute__((always_inline)) void write(Writer&& writer) {
             const uint64_t current_idx = this->producer_idx.load(memory_order_relaxed);
             auto& data_ref = this->data[mask(current_idx)].value();
 
@@ -99,7 +99,7 @@ class SharedDataStore {
         }
 
         template<class Writer>
-        void write_wake(Writer&& writer) {
+        inline __attribute__((always_inline)) void write_wake(Writer&& writer) {
             this->write(writer);
             // 唤醒
             this->futex_flag.fetch_add(1, std::memory_order_release);
@@ -107,7 +107,7 @@ class SharedDataStore {
         }
 
         template<class Reader>
-        ReadStatus read(const uint64_t local_read_idx, Reader&& reader) {
+        inline __attribute__((always_inline)) ReadStatus read(const uint64_t local_read_idx, Reader&& reader) noexcept {
             uint32_t spin = 2;
             constexpr auto MAX_SPIN = 128;
             while (true) {
@@ -134,7 +134,8 @@ class SharedDataStore {
         }
 
         template<class Reader>
-        ReadStatus read_wait(uint64_t local_read_idx, Reader&& reader, int delay_time_us = -1) {
+        inline __attribute__((always_inline)) ReadStatus read_wait(uint64_t local_read_idx, Reader&& reader,
+                                                                   int delay_time_us = -1) noexcept {
             bool infinite_wait = (delay_time_us < 0);
             auto start_time = steady_clock::now();
             auto end_time = start_time + microseconds(delay_time_us);
@@ -174,7 +175,8 @@ class SharedDataStore {
         }
 
         template<class Reader>
-        ReadStatus read_umwait(uint64_t local_read_idx, Reader&& reader, int timeout_us = -1, uint32_t state = 1) {
+        inline __attribute__((always_inline)) ReadStatus read_umwait(uint64_t local_read_idx, Reader&& reader,
+                                                                     int timeout_us = -1, uint32_t state = 1) noexcept {
             constexpr uint64_t CYCLES_PER_US = 2500;
             bool infinite_wait = (timeout_us < 0);
             uint64_t tsc_deadline = 0;
