@@ -7,19 +7,23 @@
 #include "my_struct.hpp"
 
 using namespace std;
+auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
+MemoryStorage<Student, 1024 * 1024>::StoreType* sotre;
 
 int main() {
-    auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
+
     auto store_name = string("student");
     memory_store.build(store_name, Role::WRITER);
 
-    auto& sotre = memory_store.get_store();
+    // auto& sotre = memory_store.get_store();
+    sotre = &memory_store.get_store();
     sleep(1);
     uint64_t age_cnt = 0;
     cout << "start" << endl;
     auto start_time = steady_clock::now();
     for (int i = 0; i < 1024 * 1024 * 10; ++i) {
-        sotre.write([&](Student& student) {
+        // memory_store.layout_ptr->store.write([&](Student& student) {
+        memory_store.get_store().write([&](Student& student) {
             // data_store->write_wake([&](Student& student) {
             student.age = i;
         });

@@ -7,6 +7,15 @@
 #include "my_struct.hpp"
 using namespace std;
 
+inline __attribute__((constructor)) void lock_memory() {
+    // 锁定当前已分配的内存 和 未来将分配的内存
+    printf("constructor lock_memory\n");
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
+        perror("constructor mlockall failed");
+    }
+    printf("constructor Successfully locked memory.\n");
+}
+
 int main() {
 
     auto cnt = 0;
