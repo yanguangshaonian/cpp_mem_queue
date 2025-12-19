@@ -4,8 +4,6 @@
 
 #ifndef LIB_HPP
 #define LIB_HPP
-
-#include <sys/types.h>
 #pragma pack(push)
 #pragma pack()
 
