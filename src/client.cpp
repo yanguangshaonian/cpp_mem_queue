@@ -28,13 +28,15 @@ int main() {
 
         memory_store.build(store_name, Role::READER);
         auto& store = memory_store.get_store();
-        cnt = store.get_current_idx();
+        cnt = store.get_producer_idx();
 
 
         while (true) {
             // auto read_ret = data_store->read_wait(cnt, [&](const Student& student) {
             auto read_ret = store.read(cnt, [&](const Student& student) {
+                // auto read_ret = store.read_competing(cnt, [&](const Student& student, bool is_owner) {
                 // auto read_ret = data_store->read_umwait(cnt, [&](const Student& student) {
+
                 age_cnt += student.age;
             });
             if (read_ret == ReadStatus::OVERWRITTEN) {
@@ -50,9 +52,9 @@ int main() {
     while (true) {
         sleep(1);
         cout << "---" << endl;
-        cout << age_cnt << endl;
-        cout << cnt << endl;
-        cout << over_cnt << endl;
+        cout << "age_cnt: " << age_cnt << endl;
+        cout << "cnt: " << cnt << endl;
+        cout << "over_cnt: " << over_cnt << endl;
     }
     cout << "client" << endl;
 }

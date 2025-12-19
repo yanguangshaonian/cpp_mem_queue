@@ -5,6 +5,7 @@
 #ifndef LIB_HPP
 #define LIB_HPP
 
+#include <sys/types.h>
 #pragma pack(push)
 #pragma pack()
 
@@ -32,6 +33,7 @@ using namespace std::chrono;
 
 constexpr size_t HUGE_PAGE_SIZE = 1024 * 1024 * 2;
 constexpr size_t CACHE_LINE_SIZE = 64;
+constexpr u_int16_t MAX_SPIN = 128;
 
 enum class ReadStatus {
     SUCCESS,
@@ -57,6 +59,7 @@ class SharedDataStore {
         static_assert(std::is_trivially_destructible_v<T>, "T 不允许为指针");
 
         alignas(CACHE_LINE_SIZE) atomic<uint64_t> producer_idx{0};
+        alignas(CACHE_LINE_SIZE) atomic<uint64_t> consumed_idx{0};
         alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};
         alignas(CACHE_LINE_SIZE) PaddedValue<T> data[CNT];
 
@@ -65,22 +68,26 @@ class SharedDataStore {
         }
 
     public:
-        [[nodiscard]] uint64_t get_current_idx() const {
+        [[nodiscard]] uint64_t get_producer_idx() const {
             return this->producer_idx.load(memory_order_acquire);
+        }
+
+        [[nodiscard]] uint64_t get_consumed_idx() const {
+            return this->consumed_idx.load(memory_order_acquire);
         }
 
         template<class Writer>
         inline __attribute__((always_inline)) void write(Writer&& writer) {
-            const uint64_t current_idx = this->producer_idx.load(memory_order_relaxed);
-            auto& data_ref = this->data[mask(current_idx)].value;
+            const uint64_t producer_idx = this->producer_idx.load(memory_order_relaxed);
+            auto& data_ref = this->data[mask(producer_idx)].value;
 
             if constexpr (!std::is_trivially_destructible_v<T>) {
-                if (current_idx >= CNT) {
+                if (producer_idx >= CNT) {
                     std::destroy_at(&data_ref);
                 }
             }
             writer(data_ref);
-            this->producer_idx.store(current_idx + 1, memory_order_release);
+            this->producer_idx.store(producer_idx + 1, memory_order_release);
         }
 
         template<class Writer>
@@ -93,12 +100,11 @@ class SharedDataStore {
 
         template<class Reader>
         inline __attribute__((always_inline)) ReadStatus read(const uint64_t local_read_idx, Reader&& reader) noexcept {
-            uint32_t spin = 2;
-            constexpr auto MAX_SPIN = 128;
+            u_int16_t spin = 2;
             while (true) {
-                const auto current_idx = this->get_current_idx();
-                if (local_read_idx < current_idx) {
-                    const auto oldest_available_idx = (current_idx >= CNT) ? current_idx - CNT : 0;
+                const auto producer_idx = this->get_producer_idx();
+                if (local_read_idx < producer_idx) {
+                    const auto oldest_available_idx = (producer_idx >= CNT) ? producer_idx - CNT : 0;
                     if (local_read_idx < oldest_available_idx) {
                         return ReadStatus::OVERWRITTEN;
                     }
@@ -120,7 +126,7 @@ class SharedDataStore {
 
         template<class Reader>
         inline __attribute__((always_inline)) ReadStatus read_wait(uint64_t local_read_idx, Reader&& reader,
-                                                                   int delay_time_us = -1) noexcept {
+                                                                   int32_t delay_time_us = -1) noexcept {
             bool infinite_wait = (delay_time_us < 0);
             auto start_time = steady_clock::now();
             auto end_time = start_time + microseconds(delay_time_us);
@@ -136,7 +142,7 @@ class SharedDataStore {
                 auto expected = futex_flag.load(std::memory_order_acquire);
 
                 // 二次校验
-                if (this->get_current_idx() > local_read_idx) {
+                if (this->get_producer_idx() > local_read_idx) {
                     continue;
                 }
 
@@ -169,7 +175,6 @@ class SharedDataStore {
             if (!infinite_wait) {
                 tsc_deadline = __rdtsc() + (timeout_us * CYCLES_PER_US);
             } else {
-                // 设置为最大值, 但注意 umwait 有 OS 级的最大休眠时间限制
                 tsc_deadline = ~0ULL;
             }
 
@@ -184,7 +189,7 @@ class SharedDataStore {
                 _umonitor(&this->producer_idx);
 
                 // 二次校验
-                if (this->get_current_idx() > local_read_idx) {
+                if (this->get_producer_idx() > local_read_idx) {
                     continue;
                 }
 
@@ -196,6 +201,77 @@ class SharedDataStore {
                 _umwait(state, tsc_deadline);
             };
         };
+
+        template<class Reader>
+        inline __attribute__((always_inline)) ReadStatus read_competing(const uint64_t local_read_idx,
+                                                                        Reader&& reader) noexcept {
+            u_int16_t spin = 2;
+            while (true) {
+                const auto producer_idx = this->get_producer_idx();
+                if (local_read_idx < producer_idx) {
+                    const auto oldest_available_idx = (producer_idx >= CNT) ? producer_idx - CNT : 0;
+                    if (local_read_idx < oldest_available_idx) {
+                        return ReadStatus::OVERWRITTEN;
+                    }
+
+                    // if (this->consumed_idx.load(std::memory_order_relaxed) > local_read_idx) {
+                    //     return ReadStatus::SUCCESS;
+                    // }
+                    uint64_t expected = local_read_idx;
+                    auto is_owner = this->consumed_idx.compare_exchange_strong(
+                        expected, local_read_idx + 1, std::memory_order_acq_rel, std::memory_order_relaxed);
+                    const auto& data_ref = this->data[mask(local_read_idx)].value;
+                    reader(data_ref, is_owner);
+                    return ReadStatus::SUCCESS;
+                }
+
+                if (spin > MAX_SPIN) {
+                    return ReadStatus::NOT_READY;
+                }
+
+                for (auto i = 0; i < spin; ++i) {
+                    _mm_pause();
+                }
+                spin <<= 1;
+            }
+        }
+
+        template<class Reader>
+        inline __attribute__((always_inline)) ReadStatus read_wait_competing(uint64_t local_read_idx, Reader&& reader,
+                                                                             int32_t delay_time_us = -1) noexcept {
+            auto c = 123;
+            bool infinite_wait = (delay_time_us < 0);
+            auto start_time = steady_clock::now();
+            auto end_time = start_time + microseconds(delay_time_us);
+
+            while (true) {
+                auto read_status = this->read_competing(local_read_idx, reader);
+
+                if (read_status != ReadStatus::NOT_READY) {
+                    return read_status;
+                }
+
+                auto expected = futex_flag.load(std::memory_order_acquire);
+
+                if (this->get_producer_idx() > local_read_idx) {
+                    continue;
+                }
+
+                struct timespec ts;
+                struct timespec* ts_ptr = nullptr;
+                if (!infinite_wait) {
+                    auto now = steady_clock::now();
+                    if (now >= end_time) {
+                        return ReadStatus::NOT_READY; // 确实超时了
+                    }
+                    auto remaining_ns = duration_cast<nanoseconds>(end_time - now).count();
+                    ts.tv_sec = remaining_ns / 1000000000LL;
+                    ts.tv_nsec = remaining_ns % 1000000000LL;
+                    ts_ptr = &ts;
+                }
+                syscall(SYS_futex, &futex_flag, FUTEX_WAIT, expected, ts_ptr, nullptr, 0);
+            }
+        }
 };
 
 template<class T, uint64_t CNT>
@@ -254,7 +330,7 @@ class MemoryStorage {
             }
 
             cout << ">> [复用成功] " << this->storage_name
-                 << " attached. Index: " << temp_layout->store.get_current_idx() << endl;
+                 << " attached. Index: " << temp_layout->store.get_producer_idx() << endl;
             this->layout_ptr = temp_layout;
             return 0;
         }

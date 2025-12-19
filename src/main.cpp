@@ -8,7 +8,8 @@
 
 using namespace std;
 auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
-MemoryStorage<Student, 1024 * 1024>::StoreType* sotre;
+
+// MemoryStorage<Student, 1024 * 1024>::StoreType* sotre;
 
 int main() {
 
@@ -16,7 +17,7 @@ int main() {
     memory_store.build(store_name, Role::WRITER);
 
     // auto& sotre = memory_store.get_store();
-    sotre = &memory_store.get_store();
+    auto sotre = &memory_store.get_store();
     sleep(1);
     uint64_t age_cnt = 0;
     cout << "start" << endl;
