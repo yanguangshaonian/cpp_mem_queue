@@ -239,7 +239,6 @@ class SharedDataStore {
         template<class Reader>
         inline __attribute__((always_inline)) ReadStatus read_wait_competing(uint64_t local_read_idx, Reader&& reader,
                                                                              int32_t delay_time_us = -1) noexcept {
-            auto c = 123;
             bool infinite_wait = (delay_time_us < 0);
             auto start_time = steady_clock::now();
             auto end_time = start_time + microseconds(delay_time_us);
