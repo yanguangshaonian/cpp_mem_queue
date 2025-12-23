@@ -23,10 +23,10 @@ int main() {
     uint64_t over_cnt = 0;
 
     auto t = thread([&]() {
-        auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
+        auto memory_store = mem_queue::MemoryStorage<Student, 1024 * 1024>{};
         auto store_name = string("student");
 
-        memory_store.build(store_name, Role::READER);
+        memory_store.build(store_name, mem_queue::Role::READER);
         auto& store = memory_store.get_store();
         cnt = store.get_producer_idx();
 
@@ -39,10 +39,10 @@ int main() {
 
                 age_cnt += student.age;
             });
-            if (read_ret == ReadStatus::OVERWRITTEN) {
+            if (read_ret == mem_queue::ReadStatus::OVERWRITTEN) {
                 over_cnt += 1;
                 cnt += 1;
-            } else if (read_ret == ReadStatus::SUCCESS) {
+            } else if (read_ret == mem_queue::ReadStatus::SUCCESS) {
                 cnt += 1;
             }
         }

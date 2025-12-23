@@ -5,16 +5,18 @@
 #include "iostream"
 #include "lib.hpp"
 #include "my_struct.hpp"
+#include <chrono>
 
 using namespace std;
-auto memory_store = MemoryStorage<Student, 1024 * 1024>{};
+using namespace std::chrono;
+auto memory_store = mem_queue::MemoryStorage<Student, 1024 * 1024>{};
 
 // MemoryStorage<Student, 1024 * 1024>::StoreType* sotre;
 
 int main() {
 
     auto store_name = string("student");
-    memory_store.build(store_name, Role::WRITER);
+    memory_store.build(store_name, mem_queue::Role::WRITER);
 
     // auto& sotre = memory_store.get_store();
     auto sotre = &memory_store.get_store();
