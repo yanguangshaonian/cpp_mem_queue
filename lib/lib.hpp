@@ -2,8 +2,8 @@
 // Created by yanguangshaonian on 25-11-14.
 //
 
-#ifndef LIB_HPP
-#define LIB_HPP
+#ifndef MEM_QUEUE_HPP
+#define MEM_QUEUE_HPP
 #pragma pack(push)
 #pragma pack()
 
@@ -427,4 +427,4 @@ class MemoryStorage {
 
 #pragma pack(pop)
 
-#endif //LIB_HPP
+#endif //MEM_QUEUE_HPP
