@@ -10,25 +10,26 @@
 
 using namespace std;
 using namespace std::chrono;
-auto memory_store = mem_queue::MemoryStorage<Student, 1024 * 1024>{};
 
-// MemoryStorage<Student, 1024 * 1024>::StoreType* sotre;
+// MemoryStorage<Student, 1024 * 1024>::StoreType* store;
 
 int main() {
-
+    auto cnt = 1024 * 1024;
     auto store_name = string("student");
-    memory_store.build(store_name, mem_queue::Role::WRITER);
 
-    // auto& sotre = memory_store.get_store();
-    auto sotre = &memory_store.get_store();
+    auto memory_store = mem_queue::MemoryStorage<Student>{};
+    memory_store.build(store_name, cnt);
+
+    // auto& store = memory_store.get_store();
+    auto store = memory_store.get_view();
     sleep(1);
     uint64_t age_cnt = 0;
     cout << "start" << endl;
     auto start_time = steady_clock::now();
 
-    for (uint64_t i = 0; i < 1024ULL * 1024 * 1000; ++i) {
+    for (uint64_t i = 0; i < 1024ULL * 1024 * 10; ++i) {
         // memory_store.layout_ptr->store.write([&](Student& student) {
-        memory_store.get_store().write([&](Student& student) {
+        store.write([&](Student& student) {
             // data_store->write_wake([&](Student& student) {
             student.age = i;
         });
