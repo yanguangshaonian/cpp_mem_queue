@@ -6,6 +6,7 @@
 #include "lib.hpp"
 #include "my_struct.hpp"
 #include <chrono>
+#include <cstdint>
 
 using namespace std;
 using namespace std::chrono;
@@ -24,7 +25,8 @@ int main() {
     uint64_t age_cnt = 0;
     cout << "start" << endl;
     auto start_time = steady_clock::now();
-    for (int i = 0; i < 1024 * 1024 * 10; ++i) {
+
+    for (uint64_t i = 0; i < 1024ULL * 1024 * 1000; ++i) {
         // memory_store.layout_ptr->store.write([&](Student& student) {
         memory_store.get_store().write([&](Student& student) {
             // data_store->write_wake([&](Student& student) {

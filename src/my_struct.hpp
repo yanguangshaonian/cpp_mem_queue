@@ -8,11 +8,11 @@
 class Student {
     public:
         char name[66]{};
-        uint32_t age;
+        uint64_t age;
 
         Student() = default;
 
-        explicit Student(const uint32_t age)
+        explicit Student(const uint64_t age)
             : age(age) {
             name[0] = '1';
             name[65] = '\n';
