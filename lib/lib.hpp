@@ -27,7 +27,7 @@
 #include <climits>
 #include <cstdint>
 
-namespace mem_queue {
+namespace mm_queue {
     using namespace std;
     using namespace std::chrono;
 
@@ -601,7 +601,7 @@ namespace mem_queue {
                 }
             }
     };
-} // namespace mem_queue
+} // namespace mm_queue
 
 #pragma pack(pop)
 

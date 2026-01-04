@@ -23,7 +23,7 @@ int main() {
     auto t = thread([&]() {
         auto store_name = string("student");
 
-        auto memory_store = mem_queue::MemoryStorage<Student>{};
+        auto memory_store = mm_queue::MemoryStorage<Student>{};
         memory_store.build(store_name, 1024 * 1024 * 2);
 
         auto& store = memory_store.get_view();
@@ -44,10 +44,10 @@ int main() {
                 age_cnt += student.age;
             });
 
-            if (read_ret == mem_queue::ReadStatus::OVERWRITTEN) {
+            if (read_ret == mm_queue::ReadStatus::OVERWRITTEN) {
                 over_cnt += 1;
                 cnt += 1;
-            } else if (read_ret == mem_queue::ReadStatus::SUCCESS) {
+            } else if (read_ret == mm_queue::ReadStatus::SUCCESS) {
                 cnt += 1;
             }
         }
