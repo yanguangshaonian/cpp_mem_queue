@@ -89,9 +89,9 @@ namespace mem_queue {
             volatile uint64_t magic_num;
 
             // 核心控制变量 (需保持缓存行对齐以避免伪共享)
-            alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> producer_idx{0};
-            alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> consumed_idx{0}; // 仅用于 read_competing 模式
-            alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};
+            alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> producer_idx{0}; // 生产者索引
+            alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> consumed_idx{0}; // 仅用于 read_competing 任务窃取模式
+            alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};   // 仅用于 futex 唤醒模式
 
             // 静态配置
             uint64_t element_count;     // 逻辑元素数量(必须是2的幂)

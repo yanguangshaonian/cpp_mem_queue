@@ -29,7 +29,7 @@ int main() {
 
     for (uint64_t i = 0; i < 1024ULL * 1024 * 10; ++i) {
         // memory_store.layout_ptr->store.write([&](Student& student) {
-        store.write([&](Student& student) {
+        store.write_wake([&](Student& student) {
             // data_store->write_wake([&](Student& student) {
             student.age = i;
         });

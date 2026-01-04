@@ -34,15 +34,15 @@ int main() {
         cout << "consumed_idx " << store.get_consumed_idx() << endl;
 
         while (true) {
-            auto read_ret = store.read_competing(cnt, [&](const Student& student, bool is_owner) {
-                if (is_owner) {
-                    age_cnt += student.age;
-                }
-            });
-
-            // auto read_ret = store.read(cnt, [&](const Student& student) {
-            //     age_cnt += student.age;
+            // auto read_ret = store.read_wait_competing(cnt, [&](const Student& student, bool is_owner) {
+            //     if (is_owner) {
+            //         age_cnt += student.age;
+            //     }
             // });
+
+            auto read_ret = store.read_wait(cnt, [&](const Student& student) {
+                age_cnt += student.age;
+            });
 
             if (read_ret == mem_queue::ReadStatus::OVERWRITTEN) {
                 over_cnt += 1;
