@@ -371,7 +371,7 @@ namespace mem_queue {
     // ----------------------------------------------------------------
     template<class T>
     class MemoryStorage {
-        protected:
+        private:
             enum class JoinResult {
                 SUCCESS,
                 FILE_NOT_FOUND,
