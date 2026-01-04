@@ -24,7 +24,7 @@ int main() {
         auto store_name = string("student");
 
         auto memory_store = mem_queue::MemoryStorage<Student>{};
-        memory_store.build(store_name, 1024 * 1024);
+        memory_store.build(store_name, 1024 * 1024 * 2);
 
         auto& store = memory_store.get_view();
         cnt = store.get_consumed_idx();

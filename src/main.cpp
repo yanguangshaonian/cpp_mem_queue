@@ -14,7 +14,7 @@ using namespace std::chrono;
 // MemoryStorage<Student, 1024 * 1024>::StoreType* store;
 
 int main() {
-    auto cnt = 1024 * 1024;
+    auto cnt = 1024 * 1024 * 2;
     auto store_name = string("student");
 
     auto memory_store = mem_queue::MemoryStorage<Student>{};

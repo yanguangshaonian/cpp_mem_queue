@@ -478,7 +478,7 @@ namespace mem_queue {
                 this->view.init(this->mapped_ptr);
 
                 stringstream ss;
-                ss << "复用成功。数量: " << elem_cnt << ", 占用空间: " << (file_aligned_size / 1024 / 1024) << " MB";
+                ss << "复用成功, 数量: " << elem_cnt << ", 占用空间: " << (file_aligned_size / 1024 / 1024) << " MB";
                 log_msg("INFO", ss.str());
 
                 return JoinResult::SUCCESS;
@@ -530,7 +530,7 @@ namespace mem_queue {
                 this->view.init(this->mapped_ptr);
 
                 stringstream ss;
-                ss << "创建成功。请求: " << requested_count << ", 实际容量(2^n): " << capacity
+                ss << "创建成功, 请求: " << requested_count << ", 实际容量(2^n): " << capacity
                    << ", 总大小: " << (aligned_sz / 1024 / 1024) << " MB";
                 log_msg("INFO", ss.str());
                 return true;
