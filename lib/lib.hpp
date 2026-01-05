@@ -452,6 +452,10 @@ namespace mem_queue {
                 auto elem_cnt = header->element_count;
                 auto elem_sz = header->element_size;
 
+                auto producer_idx = to_string(header->producer_idx);
+                auto consumed_idx = to_string(header->consumed_idx.load());
+                auto futex_flag = to_string(header->futex_flag.load());
+
                 if (elem_sz != sizeof(T)) {
                     log_msg("FATAL", "类型大小不匹配! 文件: " + to_string(elem_sz) + ", 本地: " + to_string(sizeof(T)));
                     munmap(temp_ptr, MIN_MAP_SIZE);
@@ -485,9 +489,6 @@ namespace mem_queue {
 
                 {
                     stringstream ss;
-                    auto producer_idx = to_string(get_view().get_consumed_idx());
-                    auto consumed_idx = to_string(get_view().get_consumed_idx());
-                    auto futex_flag = to_string(get_view().get_consumed_idx());
                     ss << "复用成功, 数量: " << elem_cnt << ", 占用空间: " << (file_aligned_size / 1024 / 1024)
                        << " MB\n"
                        << "  producer_idx          = " << producer_idx << "\n"
@@ -495,8 +496,6 @@ namespace mem_queue {
                        << "  futex_flag            = " << futex_flag;
                     log_msg("INFO", ss.str());
                 }
-
-
                 return JoinResult::SUCCESS;
             }
 

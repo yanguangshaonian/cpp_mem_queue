@@ -27,22 +27,22 @@ int main() {
         memory_store.build(store_name, 1024 * 1024 * 2);
 
         auto& store = memory_store.get_view();
-        // cnt = store.get_consumed_idx();
-        cnt = store.get_producer_idx();
+        cnt = store.get_consumed_idx();
+        // cnt = store.get_producer_idx();
         cout << "cnt: " << cnt << endl;
         cout << "producer_idx " << store.get_producer_idx() << endl;
         cout << "consumed_idx " << store.get_consumed_idx() << endl;
 
         while (true) {
-            // auto read_ret = store.read_wait_competing(cnt, [&](const Student& student, bool is_owner) {
-            //     if (is_owner) {
-            //         age_cnt += student.age;
-            //     }
-            // });
-
-            auto read_ret = store.read_wait(cnt, [&](const Student& student) {
-                age_cnt += student.age;
+            auto read_ret = store.read_wait_competing(cnt, [&](const Student& student, bool is_owner) {
+                if (is_owner) {
+                    age_cnt += student.age;
+                }
             });
+
+            // auto read_ret = store.read_wait(cnt, [&](const Student& student) {
+            //     age_cnt += student.age;
+            // });
 
             if (read_ret == mem_queue::ReadStatus::OVERWRITTEN) {
                 over_cnt += 1;
