@@ -430,7 +430,6 @@ namespace mem_queue {
 
                 auto header = reinterpret_cast<ShmHeader*>(temp_ptr);
 
-
                 // 等待初始化 2s
                 int wait_count = 0;
                 while (header->magic_num != SHM_READY_MAGIC) {
@@ -484,9 +483,19 @@ namespace mem_queue {
                 this->mapped_size = file_aligned_size;
                 this->view.init(this->mapped_ptr);
 
-                stringstream ss;
-                ss << "复用成功, 数量: " << elem_cnt << ", 占用空间: " << (file_aligned_size / 1024 / 1024) << " MB";
-                log_msg("INFO", ss.str());
+                {
+                    stringstream ss;
+                    auto producer_idx = to_string(get_view().get_consumed_idx());
+                    auto consumed_idx = to_string(get_view().get_consumed_idx());
+                    auto futex_flag = to_string(get_view().get_consumed_idx());
+                    ss << "复用成功, 数量: " << elem_cnt << ", 占用空间: " << (file_aligned_size / 1024 / 1024)
+                       << " MB\n"
+                       << "  producer_idx          = " << producer_idx << "\n"
+                       << "  consumed_idx          = " << consumed_idx << "\n"
+                       << "  futex_flag            = " << futex_flag;
+                    log_msg("INFO", ss.str());
+                }
+
 
                 return JoinResult::SUCCESS;
             }
@@ -497,10 +506,42 @@ namespace mem_queue {
                 if (this->shm_fd == -1) {
                     return false;
                 }
+                // 容量与尺寸计算
+                const uint64_t capacity = next_pow2(requested_count);
 
-                uint64_t capacity = next_pow2(requested_count);
-                auto raw_size = sizeof(ShmHeader) + sizeof(PaddedValue<T, ALIGN>) * capacity;
-                uint64_t aligned_sz = align_to_huge_page(raw_size);
+                const size_t header_sz = sizeof(ShmHeader);
+                const size_t elem_sz = sizeof(T);
+                const size_t padded_sz = sizeof(PaddedValue<T, ALIGN>);
+
+                const size_t raw_data_sz = padded_sz * capacity;
+                const size_t raw_total_sz = header_sz + raw_data_sz;
+                const size_t aligned_sz = align_to_huge_page(raw_total_sz);
+                const size_t waste_sz = aligned_sz - raw_total_sz;
+
+                {
+                    stringstream ss;
+                    ss << "开始创建共享队列:\n"
+                       << "  名称                 = " << this->storage_name << "\n"
+                       << "  请求元素数量         = " << requested_count << "\n"
+                       << "  实际容量 (2^n)       = " << capacity << "\n"
+                       << "  sizeof(T)            = " << elem_sz << " 字节\n"
+                       << "  sizeof(PaddedValue)  = " << padded_sz << " 字节\n"
+                       << "  alignof(T)           = " << alignof(T) << "\n"
+                       << "  alignof(PaddedValue) = " << alignof(PaddedValue<T, ALIGN>);
+                    log_msg("INFO", ss.str());
+                }
+                {
+                    stringstream ss;
+                    ss << "共享队列内存布局计算:\n"
+                       << "  Header 大小          = " << header_sz << " 字节\n"
+                       << "  数据区原始大小      = " << raw_data_sz << " 字节\n"
+                       << "  原始总大小          = " << raw_total_sz << " 字节\n"
+                       << "  对齐规则            = HugePage (2MB)\n"
+                       << "  对齐后总大小        = " << aligned_sz << " 字节\n"
+                       << "  对齐浪费空间        = " << waste_sz << " 字节 (" << std::fixed << std::setprecision(2)
+                       << (100.0 * waste_sz / aligned_sz) << "%)";
+                    log_msg("INFO", ss.str());
+                }
 
                 if (ftruncate(this->shm_fd, aligned_sz) == -1) {
                     log_msg("ERROR", "ftruncate 失败: " + string(strerror(errno)));
@@ -524,9 +565,10 @@ namespace mem_queue {
                 // 初始化 Header
                 auto header = new (this->mapped_ptr) ShmHeader();
                 header->element_count = capacity;
-                header->element_size = sizeof(T);
-                header->padded_element_size = sizeof(PaddedValue<T, ALIGN>);
+                header->element_size = elem_sz;
+                header->padded_element_size = padded_sz;
                 header->aligned_file_size = aligned_sz;
+
                 header->producer_idx.store(0, std::memory_order_relaxed);
                 header->consumed_idx.store(0, std::memory_order_relaxed);
                 header->futex_flag.store(0, std::memory_order_relaxed);
@@ -537,10 +579,14 @@ namespace mem_queue {
 
                 this->view.init(this->mapped_ptr);
 
-                stringstream ss;
-                ss << "创建成功, 请求: " << requested_count << ", 实际容量(2^n): " << capacity
-                   << ", 总大小: " << (aligned_sz / 1024 / 1024) << " MB";
-                log_msg("INFO", ss.str());
+
+                {
+                    stringstream ss;
+                    ss << "共享内存映射完成:\n"
+                       << "  映射总大小        = " << aligned_sz << " 字节 (" << (aligned_sz / 1024 / 1024) << " MB)";
+                    log_msg("INFO", ss.str());
+                }
+
                 return true;
             }
 
