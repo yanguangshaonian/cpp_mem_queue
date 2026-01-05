@@ -23,12 +23,12 @@ int main() {
     auto t = thread([&]() {
         auto store_name = string("student");
 
-        auto memory_store = mem_queue::MemoryStorage<Student>{};
+        auto memory_store = mem_queue::MemoryStorage<Student, 4>{};
         memory_store.build(store_name, 1024 * 1024 * 2);
 
         auto& store = memory_store.get_view();
-        cnt = store.get_consumed_idx();
-        // cnt = store.get_producer_idx();
+        // cnt = store.get_consumed_idx();
+        cnt = store.get_producer_idx();
         cout << "cnt: " << cnt << endl;
         cout << "producer_idx " << store.get_producer_idx() << endl;
         cout << "consumed_idx " << store.get_consumed_idx() << endl;

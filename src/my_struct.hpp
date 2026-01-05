@@ -7,7 +7,7 @@
 
 class Student {
     public:
-        char name[66]{};
+        char name[3]{};
         uint64_t age;
 
         Student() = default;
@@ -15,7 +15,6 @@ class Student {
         explicit Student(const uint64_t age)
             : age(age) {
             name[0] = '1';
-            name[65] = '\n';
         }
 };
 

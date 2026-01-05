@@ -73,8 +73,8 @@ namespace mem_queue {
     // ----------------------------------------------------------------
     // 数据载体
     // ----------------------------------------------------------------
-    template<class T>
-    class alignas(CACHE_LINE_SIZE) PaddedValue {
+    template<class T, size_t ALIGN = CACHE_LINE_SIZE>
+    class alignas(ALIGN) PaddedValue {
         public:
             T value;
     };
@@ -85,31 +85,32 @@ namespace mem_queue {
     // ----------------------------------------------------------------
     class alignas(CACHE_LINE_SIZE) ShmHeader {
         public:
-            volatile uint64_t magic_num;
-
             // 核心控制变量 (需保持缓存行对齐以避免伪共享)
             alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> producer_idx{0}; // 生产者索引
             alignas(CACHE_LINE_SIZE) std::atomic<uint64_t> consumed_idx{0}; // 仅用于 read_competing 任务窃取模式
             alignas(CACHE_LINE_SIZE) std::atomic<uint32_t> futex_flag{0};   // 仅用于 futex 唤醒模式
 
+            volatile uint64_t magic_num;
+
             // 静态配置
-            uint64_t element_count;     // 逻辑元素数量(必须是2的幂)
-            uint64_t element_size;      // 单个元素大小
-            uint64_t aligned_file_size; // 2MB 对齐后的文件总大小 (用于 mmap)
+            uint64_t element_count;       // 逻辑元素数量(必须是2的幂)
+            uint64_t element_size;        // 单个元素大小
+            uint64_t padded_element_size; // 填充后的元素大小
+            uint64_t aligned_file_size;   // 2MB 对齐后的文件总大小 (用于 mmap)
     };
 
     // ----------------------------------------------------------------
     // 队列视图 (View)
     // 负责所有的逻辑操作 (Lock-Free RingBuffer)
     // ----------------------------------------------------------------
-    template<class T>
+    template<class T, size_t ALIGN = CACHE_LINE_SIZE>
     class SharedQueueView {
         private:
             static_assert(std::is_trivially_copyable_v<T>, "T 必须可以安全地通过内存复制");
             static_assert(std::is_trivially_destructible_v<T>, "T 不允许为指针或包含复杂析构逻辑");
 
             ShmHeader* header = nullptr;
-            PaddedValue<T>* data_ptr = nullptr;
+            PaddedValue<T, ALIGN>* data_ptr = nullptr;
             uint64_t capacity_mask = 0;
 
             inline uint64_t mask(const uint64_t val) const {
@@ -120,7 +121,7 @@ namespace mem_queue {
             void init(uint8_t* base_addr) {
                 this->header = reinterpret_cast<ShmHeader*>(base_addr);
                 // 数据区紧跟在 Header 之后
-                this->data_ptr = reinterpret_cast<PaddedValue<T>*>(base_addr + sizeof(ShmHeader));
+                this->data_ptr = reinterpret_cast<PaddedValue<T, ALIGN>*>(base_addr + sizeof(ShmHeader));
                 // capacity 必须是 2 的幂，由 MemoryStorage 保证
                 this->capacity_mask = this->header->element_count - 1;
             }
@@ -368,7 +369,7 @@ namespace mem_queue {
     // ----------------------------------------------------------------
     // 存储管理器
     // ----------------------------------------------------------------
-    template<class T>
+    template<class T, size_t ALIGN = CACHE_LINE_SIZE>
     class MemoryStorage {
         private:
             enum class JoinResult {
@@ -380,7 +381,7 @@ namespace mem_queue {
             };
 
             string storage_name;
-            SharedQueueView<T> view;
+            SharedQueueView<T, ALIGN> view;
 
             // 资源的信息, 析构时候用
             int32_t shm_fd = -1;
@@ -458,6 +459,13 @@ namespace mem_queue {
                     close(this->shm_fd);
                     return JoinResult::TYPE_MISMATCH;
                 }
+                if (header->padded_element_size != sizeof(PaddedValue<T, ALIGN>)) {
+                    log_msg("FATAL", "填充大小不匹配! 文件: " + to_string(header->padded_element_size) +
+                                         ", 本地: " + to_string(sizeof(PaddedValue<T, ALIGN>)));
+                    munmap(temp_ptr, MIN_MAP_SIZE);
+                    close(this->shm_fd);
+                    return JoinResult::TYPE_MISMATCH;
+                }
 
                 // 解除临时映射, 然后完整映射
                 munmap(temp_ptr, MIN_MAP_SIZE);
@@ -491,7 +499,7 @@ namespace mem_queue {
                 }
 
                 uint64_t capacity = next_pow2(requested_count);
-                uint64_t raw_size = sizeof(ShmHeader) + sizeof(PaddedValue<T>) * capacity;
+                auto raw_size = sizeof(ShmHeader) + sizeof(PaddedValue<T, ALIGN>) * capacity;
                 uint64_t aligned_sz = align_to_huge_page(raw_size);
 
                 if (ftruncate(this->shm_fd, aligned_sz) == -1) {
@@ -517,6 +525,7 @@ namespace mem_queue {
                 auto header = new (this->mapped_ptr) ShmHeader();
                 header->element_count = capacity;
                 header->element_size = sizeof(T);
+                header->padded_element_size = sizeof(PaddedValue<T, ALIGN>);
                 header->aligned_file_size = aligned_sz;
                 header->producer_idx.store(0, std::memory_order_relaxed);
                 header->consumed_idx.store(0, std::memory_order_relaxed);
@@ -585,7 +594,7 @@ namespace mem_queue {
                 throw std::runtime_error("由于严重的并发竞争，初始化超时");
             }
 
-            inline SharedQueueView<T>& get_view() {
+            inline SharedQueueView<T, ALIGN>& get_view() {
                 return this->view;
             }
 
