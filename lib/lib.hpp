@@ -4,10 +4,9 @@
 
 #ifndef MEM_QUEUE_HPP
 #define MEM_QUEUE_HPP
-#include <iomanip>
 #pragma pack(push)
 #pragma pack()
-
+#include <iomanip>
 #include <chrono>
 #include <string>
 #include <sys/mman.h>
