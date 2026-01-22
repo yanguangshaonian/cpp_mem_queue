@@ -14,7 +14,7 @@ int main() {
     auto t = thread([&]() {
         auto store_name = string("student");
 
-        auto memory_store = mem_queue::MemoryStorage<Student, 4>{};
+        auto memory_store = mem_queue::MemoryStorage<Student, 64>{};
         memory_store.build(store_name, 1024 * 1024);
 
         auto& store = memory_store.get_view();

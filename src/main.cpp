@@ -17,7 +17,7 @@ int main() {
     auto cnt = 1024 * 1024;
     auto store_name = string("student");
 
-    auto memory_store = mem_queue::MemoryStorage<Student, 4>{};
+    auto memory_store = mem_queue::MemoryStorage<Student, 64>{};
     memory_store.build(store_name, cnt);
 
     // auto& store = memory_store.get_store();
